@@ -2,7 +2,6 @@ from typing import Any, List, Dict, Union, Optional
 from abc import ABC, abstractmethod
 
 
-# === Base Stream Class ===
 class DataStream(ABC):
     @abstractmethod
     def process_batch(self, data_batch: List[Any]) -> str:
@@ -19,13 +18,21 @@ class DataStream(ABC):
         return {"stream_id": "unknown", "processed": 0}
 
 
-# === Sensor Stream ===
 class SensorStream(DataStream):
     def __init__(self, stream_id: str) -> None:
         self.stream_id = stream_id
         self.processed_count = 0
 
     def process_batch(self, data_batch: List[Any]) -> str:
+        """
+        This function expects a list of dicts like
+        {"temp": 22.5, "humidity": 65}
+        It loops through each dict, formats each key-value pair
+        tracks temperature values seperately to compute an average
+        then returns a summary string
+        get_stats returns the stream ID and how many readings have been
+        processed so far
+        """
         formatted = []
         temps = []
         count = 0
@@ -40,20 +47,25 @@ class SensorStream(DataStream):
         self.processed_count += count
         return (
             f"Processing sensor batch: [{', '.join(formatted)}]\n"
-            f"Sensor analysis: {count} readings processed, avg temp: {avg_temp:.1f}°C"
+            f"Sensor analysis: {count} readings processed, avg temp:"
+            f"{avg_temp:.1f}°C"
         )
 
     def get_stats(self) -> Dict[str, Union[str, int, float]]:
         return {"stream_id": self.stream_id, "processed": self.processed_count}
 
 
-# === Transaction Stream ===
 class TransactionStream(DataStream):
     def __init__(self, stream_id: str) -> None:
         self.stream_id = stream_id
         self.processed_count = 0
 
     def process_batch(self, data_batch: List[Any]) -> str:
+        """
+        We expect dicts like {"buy": 100} {"sell": 150}
+        It accumulates a net flow, buys adds to it
+        sells subtract from it
+        """
         formatted = []
         net_flow = 0
         for op in data_batch:
@@ -68,7 +80,8 @@ class TransactionStream(DataStream):
         sign = "+" if net_flow >= 0 else ""
         return (
             f"Processing transaction batch: [{', '.join(formatted)}]\n"
-            f"Transaction analysis: {len(data_batch)} operations, net flow: {sign}{net_flow} units"
+            f"Transaction analysis: {len(data_batch)} operations, net flow:"
+            f"{sign}{net_flow} units"
         )
 
     def filter_data(
@@ -76,6 +89,11 @@ class TransactionStream(DataStream):
         data_batch: List[Any],
         criteria: Optional[str] = None
     ) -> List[Any]:
+        """
+        overridden method
+        if the criteria is "large" it keeps only operations where values
+        exceeds 100
+        """
         if criteria == "large":
             return [
                 op for op in data_batch
@@ -87,8 +105,14 @@ class TransactionStream(DataStream):
         return {"stream_id": self.stream_id, "processed": self.processed_count}
 
 
-# === Event Stream ===
 class EventStream(DataStream):
+    """
+    Tracks both total processed count and a seperate error count.
+    process_batch counts how many events are literally the string "error"
+    filter_data is overridden to keep only "error" and "alert"
+    events when criteria is "high-priority"
+    """
+
     def __init__(self, stream_id: str) -> None:
         self.stream_id = stream_id
         self.processed_count = 0
@@ -103,9 +127,8 @@ class EventStream(DataStream):
         self.error_count += errors
         formatted = ', '.join(str(e) for e in data_batch)
         return (
-            f"Processing event batch: [{formatted}]\n"
-            f"Event analysis: {len(data_batch)} events, {errors} error detected"
-        )
+            f"Processing event batch: [{formatted}]\n" f"Event analysis:"
+            f"{len(data_batch)} events, {errors} error detected")
 
     def filter_data(
         self,
@@ -127,8 +150,18 @@ class EventStream(DataStream):
         }
 
 
-# === Stream Processor ===
 class StreamProcessor:
+    """
+    This class holds a list of streams.
+    process_batch_silent takes a list of batches and an optional list of
+    criteria, one per stream. It pairs each stream with its batch and criteria
+    using zip, filters the batch, processes it, then stores the
+    original batch alongside the stream for display purposes.
+    print_batch_results then uses isinstance to figure out what type each
+    stream is and prints the appropriate message
+    This is the polymorpic dispatch happening explicitly
+    """
+
     def __init__(self, streams: List[DataStream]) -> None:
         self.streams = streams
 
@@ -137,7 +170,10 @@ class StreamProcessor:
         batches: List[List[Any]],
         criteria_list: Optional[List[Optional[str]]] = None
     ) -> List[tuple]:
-        resolved: List[Optional[str]] = criteria_list if criteria_list is not None else [None] * len(self.streams)
+        resolved: List[Optional[str]] = (
+            criteria_list if criteria_list is not None
+            else [None] * len(self.streams)
+        )
         results = []
         for stream, batch, criteria in zip(self.streams, batches, resolved):
             filtered = stream.filter_data(batch, criteria)
@@ -157,9 +193,12 @@ class StreamProcessor:
                 print(f"- Event data: {len(batch)} events processed")
 
 
-# === MAIN ===
 if __name__ == "__main__":
-
+    """
+    Creates one of each stream, runs them individually first to show the
+    per-stream output, then runs them together through StreamProcessor
+    to demonstrate the unified interface handling all three types at once.
+    """
     print("=== CODE NEXUS - POLYMORPHIC STREAM SYSTEM ===")
     print()
 
@@ -191,7 +230,8 @@ if __name__ == "__main__":
     print()
 
     demo_sensor = [{"temp": 21}, {"temp": 24}]
-    demo_transaction = [{"buy": 200}, {"sell": 50}, {"buy": 300}, {"sell": 100}]
+    demo_transaction = [{"buy": 200}, {
+        "sell": 50}, {"buy": 300}, {"sell": 100}]
     demo_event = ["login", "alert", "error"]
 
     results = processor.process_batch_silent(

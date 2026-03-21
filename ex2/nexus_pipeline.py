@@ -1,17 +1,26 @@
-from typing import Any, List, Dict, Union, Optional
+from typing import Any, List, Dict, Union
 from abc import ABC, abstractmethod
 from typing import runtime_checkable, Protocol
 from collections import defaultdict
 
 
-# === Protocol: duck typing interface for stages ===
 @runtime_checkable
 class ProcessingStage(Protocol):
+    """
+    Defines the duck typing interface.
+    Any class that has a process(data) method automatically qualifies as
+    a ProcessingStage — no explicit inheritance needed.
+    @runtime_checkable means you can use isinstance() to check if
+    something satisfies the protocol at runtime.
+    """
+
     def process(self, data: Any) -> Any:
         ...
 
 
-# === Stage Classes (no constructor params, implement Protocol) ===
+""""""
+
+
 class InputStage:
     def process(self, data: Any) -> Any:
         return data
@@ -27,8 +36,18 @@ class OutputStage:
         return data
 
 
-# === Abstract Pipeline Base ===
 class ProcessingPipeline(ABC):
+    """
+    Abstract base for all adapters.
+    Constructor takes a pipeline_id and immediately builds a list of the
+    three stages.
+    Run_stages loops through that list passing data from one stage
+    to the next
+    output of each stage becomes input of the next.
+    process() is abstract
+    forcing every subclass to define its own format-specific handling.
+    """
+
     def __init__(self, pipeline_id: str) -> None:
         self.pipeline_id = pipeline_id
         self.stages: List[ProcessingStage] = [
@@ -48,8 +67,12 @@ class ProcessingPipeline(ABC):
         pass
 
 
-# === JSON Adapter ===
 class JSONAdapter(ProcessingPipeline):
+    """
+    JSONAdapter expects a dict, extracts value and unit
+    checks if temperature is in normal range
+    """
+
     def __init__(self, pipeline_id: str) -> None:
         super().__init__(pipeline_id)
 
@@ -63,8 +86,12 @@ class JSONAdapter(ProcessingPipeline):
             raise ValueError("Invalid data format")
 
 
-# === CSV Adapter ===
 class CSVAdapter(ProcessingPipeline):
+    """
+    CSVAdapter expects a comma-separated string,
+    splits it and counts how many columns are literally "action"
+    """
+
     def __init__(self, pipeline_id: str) -> None:
         super().__init__(pipeline_id)
 
@@ -78,8 +105,11 @@ class CSVAdapter(ProcessingPipeline):
             raise ValueError("Invalid data format")
 
 
-# === Stream Adapter ===
 class StreamAdapter(ProcessingPipeline):
+    """
+    StreamAdapter expects a dict with a "readings" list, computes the average
+    """
+
     def __init__(self, pipeline_id: str) -> None:
         super().__init__(pipeline_id)
 
@@ -87,13 +117,24 @@ class StreamAdapter(ProcessingPipeline):
         try:
             readings = data.get("readings", [])
             avg = sum(readings) / len(readings) if readings else 0
-            return f"Stream summary: {len(readings)} readings, avg: {avg:.1f}°C"
+            return f"Stream summary: {
+                len(readings)} readings, avg: {
+                avg:.1f}°C"
         except Exception:
             raise ValueError("Invalid data format")
 
 
-# === Nexus Manager ===
 class NexusManager:
+    """"
+    Holds a dict of pipelines keyed by their ID.
+    register adds a pipeline.
+    run looks up a pipeline by ID and calls its process().
+    chain runs multiple pipelines in sequence,
+    feeding each output as the next pipeline's input
+    that's where subtype polymorphism is most visible,
+    run doesn't care what type the pipeline is, it just calls process().
+    """
+
     def __init__(self) -> None:
         self.pipelines: Dict[str, ProcessingPipeline] = {}
         self.stats: Dict[str, Any] = defaultdict(dict)
@@ -112,9 +153,14 @@ class NexusManager:
         return result
 
 
-# === MAIN ===
 if __name__ == "__main__":
-
+    """
+    Creates the manager, registers all three adapters,
+    then runs each one with its matching data format.
+    The error recovery block creates a JSONAdapter and deliberately
+    passes None to trigger the ValueError, catches it,
+    and simulates switching to a backup.
+    """
     print("=== CODE NEXUS - ENTERPRISE PIPELINE SYSTEM ===")
     print()
     print("Initializing Nexus Manager...")
@@ -141,14 +187,14 @@ if __name__ == "__main__":
 
     print("Processing JSON data through pipeline...")
     json_data = {"sensor": "temp", "value": 23.5, "unit": "C"}
-    print(f'Input: {{"sensor": "temp", "value": 23.5, "unit": "C"}}')
+    print('Input: {"sensor": "temp", "value": 23.5, "unit": "C"}')
     print("Transform: Enriched with metadata and validation")
     print(f"Output: {manager.run('JSON_01', json_data)}")
     print()
 
     print("Processing CSV data through same pipeline...")
     csv_data = "user,action,timestamp"
-    print(f'Input: "user,action,timestamp"')
+    print('Input: "user,action,timestamp"')
     print("Transform: Parsed and structured data")
     print(f"Output: {manager.run('CSV_01', csv_data)}")
     print()
@@ -174,7 +220,7 @@ if __name__ == "__main__":
     try:
         bad_pipeline = JSONAdapter("BAD_01")
         bad_pipeline.process(None)
-    except Exception as e:
+    except Exception:
         print("Error detected in Stage 2: Invalid data format")
         print("Recovery initiated: Switching to backup processor")
         backup_used = True

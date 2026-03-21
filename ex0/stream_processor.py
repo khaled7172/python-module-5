@@ -3,6 +3,11 @@ from abc import ABC, abstractmethod
 
 
 class DataProcessor(ABC):
+    """
+    This classs is an abstract class
+    methods with the abstract decorator must be overridden by the child classes
+    that extend from this class
+    """
     @abstractmethod
     def process(self, data: Any) -> str:
         pass
@@ -16,6 +21,11 @@ class DataProcessor(ABC):
 
 
 class NumericProcessor(DataProcessor):
+    """
+    We expect a list of numbers that contains ints or floats
+    If not validated we return a string
+    """
+
     def process(self, data: Any) -> str:
         if not self.validate(data):
             return "Numeric data has not been verified"
@@ -35,6 +45,10 @@ class NumericProcessor(DataProcessor):
 
 
 class TextProcessor(DataProcessor):
+    """
+    We expect to receive a string
+    """
+
     def process(self, data: Any) -> str:
         if not self.validate(data):
             return "Text data has not been verified"
@@ -48,6 +62,11 @@ class TextProcessor(DataProcessor):
 
 
 class LogProcessor(DataProcessor):
+    """
+    We expect to receive a string with ERROR: or INFO: inside of it
+    and we split it accordingly to return the log message
+    """
+
     def process(self, data: Any) -> str:
         if not self.validate(data):
             return "Log data has not been verified"
@@ -109,8 +128,12 @@ if __name__ == "__main__":
         LogProcessor()
     ]
     i = 1
-    for p, data in zip(processors_2, [demo_numeric, demo_text, demo_log]):
-        print(f"Result {i}: {p.process(data)}")
+    """
+    using zip pairs each processor with its matching data
+    """
+    for processor, data in zip(
+            processors_2, [demo_numeric, demo_text, demo_log]):
+        print(f"Result {i}: {processor.process(data)}")
         i += 1
     print()
     print("Foundation systems online. Nexus ready for advanced streams.")
